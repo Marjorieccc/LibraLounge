@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Resource, Medium } from "../../../types/resource";
 
 import { makeReservationAPI } from "../../../api/fetchResource/fetchResource";
+import { useAuth0 } from "@auth0/auth0-react";
 
 const reserveBtnStyle =
   "disabled:opacity-50 bg-blue-500 text-white font-bold py-2 px-4 rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 active:bg-blue-800";
@@ -18,19 +19,28 @@ const TabContent = function ({
   const [availability, setAvailability] = useState(
     mediumDetails.status ? true : false,
   );
+  const { user, isAuthenticated, getAccessTokenSilently, loginWithRedirect } =
+    useAuth0();
 
   const handleReservation = async function () {
-    try {
-      const response = await makeReservationAPI(
-        "00000",
-        resourceID,
-        mediumDetails._id,
-      );
-      if (response) {
-        setAvailability(true);
+    if (isAuthenticated && user) {
+      const accessToken = await getAccessTokenSilently();
+      try {
+        const response = await makeReservationAPI(
+          user.sub ? user.sub : "test",
+          resourceID,
+          mediumDetails._id,
+          accessToken,
+        );
+        if (response) {
+          setAvailability(true);
+        }
+      } catch (err) {
+        console.log(err);
+        throw err;
       }
-    } catch (err) {
-      console.log(err);
+    } else {
+      new Error("Not Log in");
     }
   };
 
@@ -47,13 +57,15 @@ const TabContent = function ({
         </p>
       </div>
       <br></br>
-      <button
-        disabled={!availability}
-        onClick={handleReservation}
-        className={reserveBtnStyle}
-      >
-        {availability ? `Reserve ${mediumDetails.format}` : "Not Available"}
-      </button>
+      {isAuthenticated ? (
+        <button onClick={handleReservation} className={reserveBtnStyle}>
+          Reserve {mediumDetails.format}
+        </button>
+      ) : (
+        <button className={reserveBtnStyle} onClick={() => loginWithRedirect()}>
+          Please Log In
+        </button>
+      )}
     </>
   );
 };
