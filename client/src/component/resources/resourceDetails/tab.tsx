@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Resource, Medium } from "../../../types/resource";
 
 import { makeReservationAPI } from "../../../api/fetchResource/fetchResource";
+import { useAuth0 } from "@auth0/auth0-react";
 
 const reserveBtnStyle =
   "disabled:opacity-50 bg-blue-500 text-white font-bold py-2 px-4 rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 active:bg-blue-800";
@@ -15,22 +16,30 @@ const TabContent = function ({
   description: string;
   mediumDetails: Medium;
 }) {
-  const [availability, setAvailability] = useState(
-    mediumDetails.status ? true : false,
-  );
+  const [reserved, setReserved] = useState(false);
+  const { user, isAuthenticated, getAccessTokenSilently, loginWithRedirect } =
+    useAuth0();
 
   const handleReservation = async function () {
-    try {
-      const response = await makeReservationAPI(
-        "00000",
-        resourceID,
-        mediumDetails._id,
-      );
-      if (response) {
-        setAvailability(true);
+    if (isAuthenticated && user) {
+      const accessToken = await getAccessTokenSilently();
+      try {
+        const response = await makeReservationAPI(
+          // user.sub = id from auth0
+          user.sub ? user.sub : "test",
+          resourceID,
+          mediumDetails._id,
+          accessToken,
+        );
+        if (response) {
+          setReserved(true);
+        }
+      } catch (err) {
+        console.log(err);
+        throw err;
       }
-    } catch (err) {
-      console.log(err);
+    } else {
+      new Error("Not Log in");
     }
   };
 
@@ -47,13 +56,17 @@ const TabContent = function ({
         </p>
       </div>
       <br></br>
-      <button
-        disabled={!availability}
-        onClick={handleReservation}
-        className={reserveBtnStyle}
-      >
-        {availability ? `Reserve ${mediumDetails.format}` : "Not Available"}
-      </button>
+      {isAuthenticated && !reserved && (
+        <button onClick={handleReservation} className={reserveBtnStyle}>
+          Reserve {mediumDetails.format}
+        </button>
+      )}
+      {isAuthenticated && reserved && <p>Reservation successfull</p>}
+      {!isAuthenticated && (
+        <button className={reserveBtnStyle} onClick={() => loginWithRedirect()}>
+          Please Log In
+        </button>
+      )}
     </>
   );
 };
@@ -61,15 +74,6 @@ const TabContent = function ({
 const tabStyle = `text-gray-500 py-2 px-4 rounded-t-md font-bold border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300`;
 
 export default function Tab({ resource }: { resource: Resource }) {
-  const [mediumList, setMediumList] = useState<string[]>([]);
-
-  useEffect(() => {
-    const updatedMediumList = resource.medium.map(
-      (mediumDetails) => mediumDetails.format,
-    );
-    setMediumList(updatedMediumList);
-  }, [resource]);
-
   const [selectedTab, setSelectedTab] = useState(
     resource.medium.length > 0 ? resource.medium[0].format : "",
   );
